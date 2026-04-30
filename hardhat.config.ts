@@ -1,8 +1,15 @@
+import hardhatMochaPlugin from "@nomicfoundation/hardhat-mocha";
 import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
 import { configVariable, defineConfig } from "hardhat/config";
 
 export default defineConfig({
-  plugins: [hardhatToolboxViemPlugin],
+  plugins: [hardhatToolboxViemPlugin, hardhatMochaPlugin],
+  paths: {
+    tests: {
+      mocha: "test",
+      nodejs: "test-nodejs",
+    },
+  },
   solidity: {
     profiles: {
       default: {

@@ -1,5 +1,6 @@
 /// <reference types="mocha" />
 import { network } from "hardhat";
+import { encodeFunctionData } from "viem";
 
 
 
@@ -19,21 +20,31 @@ describe("NFT Auction",async function () {
         // mint NFT 给 owner
         await nft.write.mint([owner.account.address, "ipfs://test"]);
 
-        // // Chainlink 地址（Sepolia）
-        // const priceFeed = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
         // 部署 mock
         const mock = await viem.deployContract("MockPriceFeed");
 
-        // // 部署拍卖
-        // const auction = await viem.deployContract("NFTAuction",[
-        //     mock.address
-        // ]);
-        // UUPS implementation
-        const auction = await viem.deployContract("NFTAuction");
-        // UUPS 将constructor改为initialize
-        await auction.write.initialize([mock.address]);
+        // ====== 1. 部署 V1 ======
+        const auctionV1 = await viem.deployContract("NFTAuction");
 
+        // ====== 2. 部署 Proxy ======
+        const proxy = await viem.deployContract("ERC1967Proxy", [
+            auctionV1.address,
+            encodeFunctionData({
+                abi: auctionV1.abi,
+                functionName: "initialize",
+                args: [mock.address],
+            }),
+        ]);
 
+        // ====== 3. 用 Proxy 作为 auction ======
+        const auction = await viem.getContractAt(
+            "NFTAuction",
+            proxy.address
+        );
+
+        await nft.write.approve([proxy.address, 1n]);
+
+        await nft.write.approve([auction.address, 1n]);
 
         
 
