@@ -1,5 +1,6 @@
 /// <reference types="mocha" />
 import { network } from "hardhat";
+import { encodeFunctionData } from "viem";
 
 
 
@@ -19,8 +20,6 @@ describe("NFT Auction",async function () {
         // mint NFT 给 owner
         await nft.write.mint([owner.account.address, "ipfs://test"]);
 
-        // // Chainlink 地址（Sepolia）
-        // const priceFeed = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
         // 部署 mock
         const mock = await viem.deployContract("MockPriceFeed");
 
@@ -29,16 +28,17 @@ describe("NFT Auction",async function () {
         const implV1 = await viem.deployContract("NFTAuction");
 
         // ====== 2. encode initialize data ======
-        const initData = await implV1.write.initialize([
-            mock.address,
-        ]);
+        const initData = encodeFunctionData({
+            abi: implV1.abi,
+            functionName: "initialize",
+            args: [mock.address],
+        });
 
         // ====== 3. 部署 Proxy ======
-        const proxy = await deployUUPSProxy(
-            viem,
+        const proxy = await viem.deployContract("NFTAuctionProxy", [
             implV1.address,
-            initData
-        );
+            initData,
+        ]);
 
         // ====== 4. 用 proxy 作为 auction ======
         const auction = await viem.getContractAt(
@@ -50,36 +50,14 @@ describe("NFT Auction",async function () {
         // 授权 NFT 给拍卖合约
         await nft.write.approve([auction.address, 1n]);
 
-        return { viem,owner, user1,user2, nft, auction };
+        return { viem,owner, user1,user2, nft, auction, proxy, implV1, mock };
     }
 
 
-    async function deployUUPSProxy(viem: any, implAddress: any, initData: any) {
-        const proxy = await viem.deployContract("NFTAuction", [
-            implAddress,
-            initData,
-        ]);
-        return proxy;
-    }
 
-
-    // 创建拍卖
-    it("create NFTAuction",async function(){
-        const { owner, nft, auction } = await deployFixture();
-
-        await auction.write.createAuction([
-        nft.address,
-        1n,
-        3600n
-        ]);
-
-        const a = await auction.read.auctions([1n]);
-
-    })
-
-    // 出价 + 结束拍卖
-    it("bit and print USD", async function () {
-        const { viem,owner, user1, user2, nft, auction } = await deployFixture();
+    // 升级到v2
+    it("should upgrade from V1 to V2 and preserve state", async function () {
+        const { viem,owner, user1, user2, nft, auction, proxy   } = await deployFixture();
 
         // 先创建拍卖
         await auction.write.createAuction([
@@ -108,34 +86,27 @@ describe("NFT Auction",async function () {
             value: 2n * 10n ** 18n
         });
 
+
+        // 部署 V2 实现合约
+        const implV2 = await viem.deployContract("NFTAuctionV2");
+
+        // 升级到 V2
+        await proxy.write.upgradeTo([implV2.address], {
+            account: owner.account,
+        });
+
+        // 用 V2 ABI 连接 Proxy
+        const auctionV2 = await viem.getContractAt(
+            "NFTAuctionV2",
+            proxy.address
+        );
+
+
         // 读取拍卖数据
         const a2 = await auction.read.auctions([1n]);
 
         console.log("user2:最高价 address:", a2[4].toString());
         console.log("user2:最高价 ETH:", a2[5].toString());
         console.log("user2:最高价 USD:", a2[6].toString());
-
-
-        // 获取链的控制器
-        const publicClient = await viem.getPublicClient();
-
-        // 推进时间
-        await publicClient.transport.request({
-            method: "evm_increaseTime",
-            params: [7200],
-        });
-
-        // 生成新区块
-        await publicClient.transport.request({
-            method: "evm_mine",
-            params: [],
-        });
-
-        // 结束拍卖
-        await auction.write.endAuction([1n]);
-        // 读取拍卖数据
-        const a3 = await auction.read.auctions([1n]);
-        console.log("ended:", a3[7]);
     })
-
 })
