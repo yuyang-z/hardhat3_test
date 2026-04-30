@@ -1,6 +1,5 @@
 /// <reference types="mocha" />
 import { network } from "hardhat";
-import { encodeFunctionData } from "viem";
 
 
 
@@ -20,39 +19,49 @@ describe("NFT Auction",async function () {
         // mint NFT 给 owner
         await nft.write.mint([owner.account.address, "ipfs://test"]);
 
+        // // Chainlink 地址（Sepolia）
+        // const priceFeed = "0x694AA1769357215DE4FAC081bf1f309aDC325306";
         // 部署 mock
         const mock = await viem.deployContract("MockPriceFeed");
 
-        // ====== 1. 部署 V1 ======
-        const auctionV1 = await viem.deployContract("NFTAuction");
+        
+        // ====== 1. 部署实现合约 ======
+        const implV1 = await viem.deployContract("NFTAuction");
 
-        // ====== 2. 部署 Proxy ======
-        const proxy = await viem.deployContract("ERC1967Proxy", [
-            auctionV1.address,
-            encodeFunctionData({
-                abi: auctionV1.abi,
-                functionName: "initialize",
-                args: [mock.address],
-            }),
+        // ====== 2. encode initialize data ======
+        const initData = await implV1.write.initialize([
+            mock.address,
         ]);
 
-        // ====== 3. 用 Proxy 作为 auction ======
+        // ====== 3. 部署 Proxy ======
+        const proxy = await deployUUPSProxy(
+            viem,
+            implV1.address,
+            initData
+        );
+
+        // ====== 4. 用 proxy 作为 auction ======
         const auction = await viem.getContractAt(
             "NFTAuction",
             proxy.address
         );
 
-        await nft.write.approve([proxy.address, 1n]);
-
-        await nft.write.approve([auction.address, 1n]);
-
-        
 
         // 授权 NFT 给拍卖合约
         await nft.write.approve([auction.address, 1n]);
 
         return { viem,owner, user1,user2, nft, auction };
     }
+
+
+    async function deployUUPSProxy(viem: any, implAddress: any, initData: any) {
+        const proxy = await viem.deployContract("NFTAuction", [
+            implAddress,
+            initData,
+        ]);
+        return proxy;
+    }
+
 
     // 创建拍卖
     it("create NFTAuction",async function(){
