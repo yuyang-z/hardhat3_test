@@ -4,9 +4,10 @@ import { encodeFunctionData } from "viem";
 
 
 
+
 // 一组测试（测试套件）
 describe("NFT Auction",async function () {
-
+    
     async function deployFixture() {
         
         // 用来操作合约
@@ -45,7 +46,6 @@ describe("NFT Auction",async function () {
             "NFTAuction",
             proxy.address
         );
-
 
         // 授权 NFT 给拍卖合约
         await nft.write.approve([auction.address, 1n]);
@@ -91,7 +91,10 @@ describe("NFT Auction",async function () {
         const implV2 = await viem.deployContract("NFTAuctionV2");
 
         // 升级到 V2
-        await proxy.write.upgradeTo([implV2.address], {
+        console.log(proxy.address)
+        console.log(implV2.address)
+
+        await (auction.write as any).upgradeTo([implV2.address], {
             account: owner.account,
         });
 

@@ -8,4 +8,5 @@ contract NFTAuctionProxy is ERC1967Proxy  {
         address _implementation,
         bytes memory _data
     ) ERC1967Proxy(_implementation, _data) {}
+
 }
