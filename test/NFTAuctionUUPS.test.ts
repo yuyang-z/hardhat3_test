@@ -94,7 +94,7 @@ describe("NFT Auction",async function () {
         console.log(proxy.address)
         console.log(implV2.address)
 
-        await (auction.write as any).upgradeTo([implV2.address], {
+        await auction.write.upgradeToAndCall([implV2.address, "0x"], {
             account: owner.account,
         });
 
@@ -104,9 +104,13 @@ describe("NFT Auction",async function () {
             proxy.address
         );
 
+        // 测试v2的数据
+        const version = await auctionV2.read.getVersion();
+        console.log(version);
+
 
         // 读取拍卖数据
-        const a2 = await auction.read.auctions([1n]);
+        const a2 = await auctionV2.read.auctions([1n]);
 
         console.log("user2:最高价 address:", a2[4].toString());
         console.log("user2:最高价 ETH:", a2[5].toString());
